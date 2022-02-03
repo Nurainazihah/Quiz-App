@@ -1,39 +1,11 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:html' as html;
+import 'package:html_character_entities/html_character_entities.dart';
 
-//import './quiz.dart';
-//import './result.dart';
-
-//nazurah: buat interface, score, random susunan answer
-
-class Trivia {
-  final String question;
-  final String correct_answer;
-  final List<String> incorrect_answers;
-
-  Trivia({
-    required this.question,
-    required this.correct_answer,
-    required this.incorrect_answers,
-  });
-
-  factory Trivia.fromJson(Map<String, dynamic> json) => Trivia(
-        question: json["question"],
-        correct_answer: json["correct_answer"],
-        incorrect_answers:
-            List<String>.from(json["incorrect_answers"].map((x) => x)),
-      );
-
-  Map<String, dynamic> toJson() => {
-        "question": question,
-        "correct_answer": correct_answer,
-        "incorrect_answers":
-            List<dynamic>.from(incorrect_answers.map((x) => x)),
-      };
-}
+import 'widgets/trivia.dart';
+import 'widgets/result.dart';
+import 'api.dart';
+import 'models/question.dart';
 
 void main() => runApp(MyApp());
 
@@ -45,74 +17,49 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  late Future<List<Trivia>> futureTrivia;
-  List<dynamic> question = [];
+  late Future<List<Trivia>> _futureTrivia;
+  List<Trivia> _questions = [];
+  late API data = API();
 
-  Future<List<Trivia>> fetchData() async {
-    final response = await http.get(Uri.parse(
-        'https://opentdb.com/api.php?amount=5&category=22&difficulty=easy&type=multiple'));
-
-    if (response.statusCode == 200) {
-      // If the server did return a 200 OK response,
-      // then parse the JSON.
-
-      List jsonResponse = json.decode(response.body)['results'];
-      setState(() {
-        question = jsonResponse;
-      });
-      return jsonResponse.map((data) => Trivia.fromJson(data)).toList();
-
-      //return Trivia.fromJson(jsonDecode(response.body));
-    } else {
-      // If the server did not return a 200 OK response,
-      // then throw an exception.
-      throw Exception('Failed to load data');
-    }
-  }
+  var html = HtmlCharacterEntities.decode;
+  //converts HTML entities in the string to their corresponding characters
 
   @override
   void initState() {
     super.initState();
-    futureTrivia = fetchData();
+    _futureTrivia = data.fetchData();
   }
 
   var _questionIndex = 0;
-  var _totalScore = 0;
+  var _score = 0;
+
+  void _answerQuestion(String selectedAnswer) {
+    var correctAnswer = _questions[_questionIndex].correct_answer;
+
+    print('Question: ' + (_questionIndex + 1).toString());
+    print('Answer: ' + correctAnswer);
+
+    //check answer
+    if (selectedAnswer == correctAnswer) {
+      print('Correct');
+      setState(() {
+        _score = _score + 1;
+      });
+    } else {
+      print('Wrong');
+    }
+    setState(() {
+      _questionIndex = _questionIndex + 1;
+    });
+  }
 
   void _resetQuiz() {
     setState(() {
       _questionIndex = 0;
       // reset question
-      futureTrivia = fetchData(); 
-      //_totalScore = 0;
+      _futureTrivia = data.fetchData();
+      _score = 0;
     });
-  }
-
-  /*void _answerQuestion(int score) {
-
-    _totalScore += score;
-
-    setState(() {
-      _questionIndex = _questionIndex + 1;
-    });
-    print(_questionIndex);
-    if (_questionIndex < _questions.length) {
-      print('We have more questions!');
-    } else {
-      print('No more questions!');
-    }
-  }*/
-
-  void _answerQuestion() {
-    setState(() {
-      _questionIndex = _questionIndex + 1;
-    });
-    print(_questionIndex);
-    if (_questionIndex < question.length) {
-      print('We have more questions!');
-    } else {
-      print('No more questions!');
-    }
   }
 
   @override
@@ -123,73 +70,36 @@ class _MyAppState extends State<MyApp> {
           title: Text('My First App'),
         ),
         body: Padding(
-          padding: const EdgeInsets.all(30.0),
-          child: _questionIndex < question.length
-              ? displayData()
-              : FlatButton(
-                  color: Color(0xFF00E676),
-                  textColor: Colors.white,
-                  child: Text('Play again'),
-                  onPressed: _resetQuiz,
-                ),
-        ),
+            padding: const EdgeInsets.all(30.0),
+            child: futureWidget() //Display the questions and answers
+            ),
       ),
-
-      /*? Quiz(
-                answerQuestion: _answerQuestion,
-                questionIndex: _questionIndex,
-                questions: _questions,
-              )
-            : Result(_totalScore, _resetQuiz),*/
-
       debugShowCheckedModeBanner: false,
     );
   }
 
-  Widget displayData() {
+  Widget futureWidget() {
     return FutureBuilder<List<Trivia>>(
-      future: futureTrivia,
+      future: _futureTrivia,
       builder: (context, snapshot) {
         if (snapshot.hasData) {
           //List<Trivia> data = snapshot.data as List<Trivia>;
+          _questions = snapshot.data!;
           return Container(
               width: double.infinity,
               margin: EdgeInsets.all(10),
               child: Column(children: [
-                Text('${_questionIndex+1}. ${snapshot.data![_questionIndex].question}'),
-                RaisedButton(
-                  color: Color(0xFF00E676),
-                  textColor: Colors.white,
-                  child: Text(
-                      'answer: ${snapshot.data![_questionIndex].correct_answer}'),
-                  onPressed: _answerQuestion,
-                ),
-                RaisedButton(
-                  color: Color(0xFF00E676),
-                  textColor: Colors.white,
-                  child: Text(
-                      'incorrect answer: ${snapshot.data![_questionIndex].incorrect_answers[0]}'),
-                  onPressed: _answerQuestion,
-                ),
-                RaisedButton(
-                  color: Color(0xFF00E676),
-                  textColor: Colors.white,
-                  child: Text(
-                      'incorrect answer: ${snapshot.data![_questionIndex].incorrect_answers[1]}'),
-                  onPressed: _answerQuestion,
-                ),
-                RaisedButton(
-                  color: Color(0xFF00E676),
-                  textColor: Colors.white,
-                  child: Text(
-                      'incorrect answer: ${snapshot.data![_questionIndex].incorrect_answers[2]}'),
-                  onPressed: _answerQuestion,
-                ),
+                _questionIndex < _questions.length
+                    ? TriviaWidget(
+                        questionIndex: _questionIndex,
+                        questions: _questions,
+                        answerQuestion: (String val) => _answerQuestion(val),
+                      )
+                    : Result(_score, _resetQuiz)
               ]));
         } else if (snapshot.hasError) {
           return Text('${snapshot.error}');
         }
-
         // By default, show a loading spinner.
         return CircularProgressIndicator();
       },
